@@ -1,49 +1,35 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import APIRouter, Request
 import resend
 import os
-from pydantic import BaseModel
-from typing import Optional, Any
 
-app = FastAPI()
+# ⚠️ Dhyan de: Yahan 'app = FastAPI()' NAHI hona chahiye.
+# Yahan 'router = APIRouter()' hona chahiye.
+router = APIRouter()
 
-# ---------------------------------------------------------
-# CONFIGURATION
-# Koyeb ke Settings me RESEND_API_KEY set karna hoga
-# ---------------------------------------------------------
+# --- CONFIGURATION ---
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 
 if not RESEND_API_KEY:
-    print("WARNING: RESEND_API_KEY is missing!")
+    print("⚠️ WARNING: RESEND_API_KEY is missing via Environment Variables")
 
 resend.api_key = RESEND_API_KEY
 
-# ---------------------------------------------------------
-# ROUTES
-# ---------------------------------------------------------
-
-@app.get("/")
-def health_check():
-    """Koyeb health check ke liye"""
-    return {"status": "healthy", "service": "Luviio Emailer"}
-
-@app.post("/webhook/send-email")
+# --- WEBHOOK ROUTE ---
+@router.post("/webhook/send-email")
 async def handle_supabase_webhook(request: Request):
     try:
-        # 1. Supabase se data pakdo
+        # 1. Supabase se data lena
         payload = await request.json()
-        print(f"Event Received: {payload}")
-
-        # 2. 'record' aur 'email' nikalo
         record = payload.get('record', {})
         user_email = record.get('email')
 
-        # Safety Check
-        if not user_email:
-            return {"status": "skipped", "message": "No email found in record"}
+        # Agar email nahi mila to skip karo
+        if not user_email: 
+            return {"status": "skipped", "message": "No email found"}
 
-        print(f"Preparing to send email to: {user_email}")
+        print(f"Sending welcome email to: {user_email}")
 
-        # 3. Email Content (Responsive HTML)
+        # 2. PROFESSIONAL HTML CONTENT
         html_content = """
         <!DOCTYPE html>
         <html lang="en">
@@ -69,7 +55,7 @@ async def handle_supabase_webhook(request: Request):
         </html>
         """
 
-        # 4. Send Email via Resend
+        # 3. Email bhejna (Resend ke through)
         params = {
             "from": "Luviio Team <no-reply@luviio.in>",
             "to": [user_email],
@@ -78,11 +64,10 @@ async def handle_supabase_webhook(request: Request):
         }
 
         email = resend.Emails.send(params)
-        print("Email Sent! ID:", email)
-
+        print(f"✅ Email Sent Successfully! ID: {email}")
+        
         return {"status": "success", "email_id": email}
 
     except Exception as e:
-        print(f"Error sending email: {str(e)}")
-        # Hum 200 hi return karenge taaki Supabase bar-bar retry na kare
+        print(f"❌ Error sending email: {str(e)}")
         return {"status": "error", "details": str(e)}
