@@ -25,7 +25,7 @@ ONBOARDING_HTML = """
     
     body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; padding: 20px; overflow: hidden; }
 
-    /* LOADING OVERLAY (Crucial for OAuth Redirects) */
+    /* LOADING OVERLAY */
     #auth-loader {
         position: fixed; inset: 0; background: #000; z-index: 9999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -34,11 +34,15 @@ ONBOARDING_HTML = """
     .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s infinite linear; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* PROGRESS BAR */
+    /* ERROR BUTTON */
+    #reset-btn {
+        display: none; margin-top: 20px; padding: 10px 20px;
+        background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer;
+    }
+
+    /* WIZARD UI */
     .progress-container { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #222; }
     .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
-
-    /* FORM CONTAINER */
     .wizard-container { width: 100%; max-width: 500px; position: relative; min-height: 500px; perspective: 1000px; display: none; }
 
     .step-card {
@@ -52,7 +56,6 @@ ONBOARDING_HTML = """
     h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
     .label { display: block; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 20px; }
 
-    /* INPUTS */
     input, select, textarea {
       width: 100%; padding: 14px; background: rgba(255,255,255,0.05);
       border: 1px solid var(--border); border-radius: 12px; color: white;
@@ -60,7 +63,6 @@ ONBOARDING_HTML = """
     }
     input:focus, select:focus { border-color: var(--accent); background: rgba(255,255,255,0.08); }
 
-    /* RADIO CARDS */
     .radio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
     .radio-card {
       padding: 20px; border: 1px solid var(--border); border-radius: 12px;
@@ -70,32 +72,26 @@ ONBOARDING_HTML = """
     .radio-card.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
     .radio-icon { font-size: 1.5rem; margin-bottom: 5px; color: #ccc; }
 
-    /* BUTTONS */
     .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
     .btn-next {
       background: #fff; color: #000; border: none; padding: 12px 30px;
       border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s; opacity: 0.5; pointer-events: none;
     }
     .btn-next.enabled { opacity: 1; pointer-events: all; }
-    
     .btn-back { color: var(--text-dim); cursor: pointer; font-size: 0.9rem; }
-    .btn-back:hover { color: #fff; }
-
   </style>
 </head>
 <body>
 
   <div id="auth-loader">
     <div class="spinner"></div>
-    <p style="margin-top:15px; color:#666; font-size:0.9rem;">Securing workspace...</p>
+    <p id="status-text" style="margin-top:15px; color:#666; font-size:0.9rem;">Connecting to secure server...</p>
+    <button id="reset-btn" onclick="hardReset()">Stuck? Click to Reset</button>
   </div>
 
   <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
 
-  <div class="grid-bg"></div>
-
   <div class="wizard-container" id="wizard">
-    
     <div class="step-card active" id="step1">
       <h2>Q1. Who are you?</h2>
       <span class="label">Let's start with your official name.</span>
@@ -104,7 +100,6 @@ ONBOARDING_HTML = """
         <button class="btn-next" id="btn1" onclick="nextStep(2)">Next</button>
       </div>
     </div>
-
     <div class="step-card" id="step2">
       <h2>Q2. What is your purpose?</h2>
       <span class="label">Are you here to buy/rent or to sell/list?</span>
@@ -123,7 +118,6 @@ ONBOARDING_HTML = """
         <button class="btn-next" id="btn2" onclick="handleRoleNext()">Next</button>
       </div>
     </div>
-
     <div class="step-card" id="step3">
       <h2>Q3. Where did you hear about us?</h2>
       <span class="label">Help us know how you found Luviio.</span>
@@ -139,110 +133,105 @@ ONBOARDING_HTML = """
         <button class="btn-next" id="btn3" onclick="handleSourceNext()">Next</button>
       </div>
     </div>
-
     <div class="step-card" id="step4">
       <h2>Store Details</h2>
       <span class="label">Tell us about your business entity.</span>
-      
-      <label style="font-size:0.8rem; color:#666;">Q4. Store/Agency Name</label>
+      <label style="font-size:0.8rem; color:#666;">Store/Agency Name</label>
       <input type="text" id="storeName" placeholder="e.g. Sharma Estates" oninput="validate(4)">
-      
-      <label style="font-size:0.8rem; color:#666; margin-top:10px; display:block">Q5. Store Address</label>
+      <label style="font-size:0.8rem; color:#666; margin-top:10px; display:block">Store Address</label>
       <textarea id="storeAddress" rows="2" placeholder="Full business address..." oninput="validate(4)"></textarea>
-
       <div class="actions">
         <div class="btn-back" onclick="prevStep(3)">Back</div>
         <button class="btn-next" id="btn4" onclick="nextStep(5)">Next</button>
       </div>
     </div>
-
     <div class="step-card" id="step5">
       <h2>Contact & Plan</h2>
-      <span class="label">How can customers reach you?</span>
-
-      <label style="font-size:0.8rem; color:#666;">Q6. Store Contact (Phone/Email)</label>
-      <input type="text" id="storeContact" placeholder="Official Email or Phone" oninput="validate(5)">
-
-      <label style="font-size:0.8rem; color:#666; margin-top:10px; display:block">Q7. What is your Category?</label>
+      <span class="label">Final details.</span>
+      <input type="text" id="storeContact" placeholder="Phone/Email" oninput="validate(5)">
       <select id="category" onchange="validate(5)">
         <option value="" disabled selected>Select Category</option>
-        <option value="real_estate">Real Estate Agency</option>
-        <option value="independent">Independent Broker</option>
-        <option value="builder">Builder / Developer</option>
+        <option value="real_estate">Real Estate</option>
+        <option value="independent">Independent</option>
+        <option value="builder">Builder</option>
       </select>
-
-      <div style="margin-top:20px; padding:15px; background:rgba(34, 197, 94, 0.1); border:1px solid #22c55e; border-radius:10px;">
-        <p style="color:#22c55e; margin:0; font-size:0.85rem;"><i class="ri-checkbox-circle-line"></i> Current Plan: <b>Free Tier</b> (New User)</p>
-      </div>
-
       <div class="actions">
         <div class="btn-back" onclick="prevStep(4)">Back</div>
-        <button class="btn-next" id="btn5" onclick="submitData()">Complete Setup</button>
+        <button class="btn-next" id="btn5" onclick="submitData()">Finish Setup</button>
       </div>
     </div>
-
   </div>
 
   <script>
     const SB_URL = 'https://enqcujmzxtrbfkaungpm.supabase.co';
     const SB_KEY = 'sb_publishable_0jeCSzd3NkL-RlQn8X-eTA_-xH03xVd';
     const supabase = supabase.createClient(SB_URL, SB_KEY);
-
+    
     let currentUser = null;
     let formData = { fullName: '', role: '', source: '', storeName: '', storeAddress: '', storeContact: '', category: '' };
 
-    // --- 1. ROBUST INIT (Handles Redirects Correctly) ---
+    // --- FORCE INIT LOGIC ---
     async function init() {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session) {
-                currentUser = session.user;
-                
-                // Hide loader, Show Wizard
-                document.getElementById('auth-loader').style.display = 'none';
-                document.getElementById('wizard').style.display = 'block';
-                
-                // Animation Entry
-                gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
-                
-                // Gatekeeper: Check if already onboarded
-                checkIfOnboarded(currentUser.id);
-            } else {
-                // If no session after 3 seconds, send back to login
-                setTimeout(() => {
-                    if(!currentUser) window.location.href = '/'; 
-                }, 3000);
-            }
-        });
-    }
+        console.log("Checking session...");
 
-    async function checkIfOnboarded(userId) {
-        const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
-        if (data && data.role) {
-            window.location.href = '/dashboard'; 
+        // 1. Timeout Fallback (Agar 5 sec me kuch na ho)
+        setTimeout(() => {
+            if (!currentUser) {
+                document.getElementById('status-text').innerText = "Taking longer than usual...";
+                document.getElementById('reset-btn').style.display = 'block';
+            }
+        }, 5000);
+
+        // 2. Direct Session Check (Fastest)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+            handleSessionFound(session);
+        } else {
+            // 3. Listener (Backup)
+            supabase.auth.onAuthStateChange((event, session) => {
+                if (session) handleSessionFound(session);
+            });
         }
     }
-    
+
+    async function handleSessionFound(session) {
+        if (currentUser) return; // Already loaded
+        currentUser = session.user;
+        console.log("User found:", currentUser.id);
+
+        // Hide Loader
+        document.getElementById('auth-loader').style.display = 'none';
+        document.getElementById('wizard').style.display = 'block';
+        
+        // Animation
+        gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
+
+        // Check Profile
+        const { data } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+        if (data && data.role) {
+            window.location.href = '/dashboard';
+        }
+    }
+
+    window.hardReset = async function() {
+        await supabase.auth.signOut();
+        localStorage.clear();
+        window.location.href = '/';
+    }
+
     init();
 
-    // --- 2. VALIDATION (Fixed Button States) ---
+    // --- UI LOGIC ---
     window.validate = function(step) {
       let isValid = false;
       const btn = document.getElementById(`btn${step}`);
-      
       if (step === 1) isValid = document.getElementById('fullName').value.trim().length > 2;
       if (step === 3) isValid = document.getElementById('source').value !== "";
-      if (step === 4) {
-        isValid = document.getElementById('storeName').value.length > 2 && 
-                  document.getElementById('storeAddress').value.length > 5;
-      }
-      if (step === 5) {
-        isValid = document.getElementById('storeContact').value.length > 5 && 
-                  document.getElementById('category').value !== "";
-      }
+      if (step === 4) isValid = document.getElementById('storeName').value.length > 2 && document.getElementById('storeAddress').value.length > 5;
+      if (step === 5) isValid = document.getElementById('storeContact').value.length > 5 && document.getElementById('category').value !== "";
       
-      // Use CSS class for enabling/disabling instead of attribute
-      if(isValid) btn.classList.add('enabled');
-      else btn.classList.remove('enabled');
+      if(isValid) btn.classList.add('enabled'); else btn.classList.remove('enabled');
     }
 
     window.selectRole = function(role, el) {
@@ -252,32 +241,13 @@ ONBOARDING_HTML = """
       document.getElementById('btn2').classList.add('enabled');
     }
 
-    // --- 3. NAVIGATION LOGIC ---
-    window.handleRoleNext = function() {
-      if(!formData.role) return;
-      nextStep(3);
-    }
-
-    window.handleSourceNext = function() {
-      formData.source = document.getElementById('source').value;
-      if (formData.role === 'buyer') {
-        submitData(); // Buyers finish early
-      } else {
-        nextStep(4); // Sellers continue
-      }
-    }
-
     window.nextStep = function(target) {
       const current = document.querySelector('.step-card.active');
       const next = document.getElementById(`step${target}`);
-      
       document.getElementById('progressBar').style.width = `${(target/5)*100}%`;
-
       gsap.to(current, { x: -50, opacity: 0, duration: 0.3, onComplete: () => {
-        current.classList.remove('active');
-        current.style.visibility = 'hidden';
-        next.style.visibility = 'visible';
-        next.classList.add('active');
+        current.classList.remove('active'); current.style.visibility = 'hidden';
+        next.style.visibility = 'visible'; next.classList.add('active');
         gsap.fromTo(next, { x: 50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
       }});
     }
@@ -285,59 +255,41 @@ ONBOARDING_HTML = """
     window.prevStep = function(target) {
       const current = document.querySelector('.step-card.active');
       const prev = document.getElementById(`step${target}`);
-      
       gsap.to(current, { x: 50, opacity: 0, duration: 0.3, onComplete: () => {
-        current.classList.remove('active');
-        current.style.visibility = 'hidden';
-        prev.style.visibility = 'visible';
-        prev.classList.add('active');
+        current.classList.remove('active'); current.style.visibility = 'hidden';
+        prev.style.visibility = 'visible'; prev.classList.add('active');
         gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
       }});
     }
 
-    // --- 4. SUBMIT LOGIC ---
+    window.handleRoleNext = function() { if(formData.role) nextStep(3); }
+    window.handleSourceNext = function() {
+       formData.source = document.getElementById('source').value;
+       if(formData.role === 'buyer') submitData(); else nextStep(4);
+    }
+
     window.submitData = async function() {
-      if(!currentUser) return alert("Session expired. Please login again.");
-      
-      const btn = document.getElementById('btn5') || document.getElementById('btn3');
-      btn.innerText = "Setting up...";
-      
-      formData.fullName = document.getElementById('fullName').value;
-      if(formData.role === 'seller') {
-        formData.storeName = document.getElementById('storeName').value;
-        formData.storeAddress = document.getElementById('storeAddress').value;
-        formData.storeContact = document.getElementById('storeContact').value;
-        formData.category = document.getElementById('category').value;
-      }
-
-      try {
-        // Update Profile
-        const { error: pErr } = await supabase.from('profiles').update({
-            full_name: formData.fullName,
-            role: formData.role,
-            referral_source: formData.source
-        }).eq('id', currentUser.id);
-        if(pErr) throw pErr;
-
-        // Insert Store
+        if(!currentUser) return alert("Session lost.");
+        const btn = document.getElementById('btn5') || document.getElementById('btn3');
+        btn.innerText = "Saving...";
+        
+        formData.fullName = document.getElementById('fullName').value;
         if(formData.role === 'seller') {
-          const { error: sErr } = await supabase.from('stores').insert([{
-            owner_id: currentUser.id,
-            store_name: formData.storeName,
-            address: formData.storeAddress,
-            contact_email: formData.storeContact,
-            category: formData.category
-          }]);
-          if(sErr) throw sErr;
+            formData.storeName = document.getElementById('storeName').value;
+            formData.storeAddress = document.getElementById('storeAddress').value;
+            formData.storeContact = document.getElementById('storeContact').value;
+            formData.category = document.getElementById('category').value;
         }
 
-        window.location.href = '/dashboard';
-
-      } catch (err) {
-        console.error(err);
-        alert("Setup failed: " + err.message);
-        btn.innerText = "Try Again";
-      }
+        try {
+            await supabase.from('profiles').update({ full_name: formData.fullName, role: formData.role, referral_source: formData.source }).eq('id', currentUser.id);
+            if(formData.role === 'seller') {
+                await supabase.from('stores').insert([{ owner_id: currentUser.id, store_name: formData.storeName, address: formData.storeAddress, contact_email: formData.storeContact, category: formData.category }]);
+            }
+            window.location.href = '/dashboard';
+        } catch (err) {
+            alert("Error: " + err.message); btn.innerText = "Try Again";
+        }
     }
   </script>
 </body>
