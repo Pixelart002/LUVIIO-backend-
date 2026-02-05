@@ -71,6 +71,7 @@ LOGIN_HTML = """
         overflow: hidden; position: relative;
     }
 
+    /* Animated Grid Background */
     .grid-bg {
         position: absolute; inset: 0; z-index: -1;
         background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
@@ -90,6 +91,7 @@ LOGIN_HTML = """
     .brand { font-size: 26px; font-weight: 800; letter-spacing: -1px; margin-bottom: 6px; display: inline-block; color: #fff; } 
     .subtitle { color: var(--text-muted); font-size: 14px; }
 
+    /* Social Buttons */
     .social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 25px; }
     .btn-social { 
         display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; 
@@ -102,6 +104,7 @@ LOGIN_HTML = """
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); } 
     .divider span { padding: 0 12px; }
 
+    /* Inputs */
     .input-group { margin-bottom: 16px; position: relative; } 
     .input-wrapper { position: relative; }
     .input-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px; pointer-events: none; transition: 0.3s; }
@@ -114,8 +117,10 @@ LOGIN_HTML = """
     input:focus { border-color: var(--accent); background: rgba(20,20,20,0.9); box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
     input:focus + .input-icon { color: var(--accent); }
 
+    /* Honeypot for Security */
     .hp-field { display: none; visibility: hidden; opacity: 0; position: absolute; left: -9999px; }
 
+    /* Primary Button */
     .btn-primary { 
         width: 100%; padding: 14px; background: var(--primary); color: var(--primary-fg); 
         border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; 
@@ -128,6 +133,7 @@ LOGIN_HTML = """
     .loader { display: none; width: 18px; height: 18px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; } 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Toast Notification */
     .toast {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px);
         background: rgba(20, 20, 20, 0.95); border: 1px solid var(--border);
@@ -200,6 +206,7 @@ LOGIN_HTML = """
   </div>
 
   <script>
+    // --- 1. CONFIGURATION ---
     const SB_URL = 'https://enqcujmzxtrbfkaungpm.supabase.co';
     const SB_KEY = 'sb_publishable_0jeCSzd3NkL-RlQn8X-eTA_-xH03xVd';
     let supabaseClient = null;
@@ -218,11 +225,12 @@ LOGIN_HTML = """
         }
     });
 
-    // --- SMART AUTH LOGIC ---
+    // --- 2. AUTH LOGIC ---
     async function signInWithProvider(providerName) {
       if(!supabaseClient) return;
       try {
-        // Updated: Redirect to Onboarding FIRST to be safe
+        // 🔥 UPDATED: Redirect to Onboarding FIRST. 
+        // This fixes the 'localhost:3000' issue and ensures new users go to setup.
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
           provider: providerName,
           options: { redirectTo: window.location.origin + '/onboarding' }
@@ -267,6 +275,7 @@ LOGIN_HTML = """
 
         let result;
         if (isSignUp) {
+          // 🔥 UPDATED: New Signups go to Onboarding
           result = await supabaseClient.auth.signUp({ 
             email, password, options: { emailRedirectTo: window.location.origin + '/onboarding' }
           });
@@ -282,23 +291,20 @@ LOGIN_HTML = """
         } else {
            showToast("Access Granted.", "success");
            
-           // 🔥 INTELLIGENT REDIRECT LOGIC 🔥
+           // 🔥 SMART REDIRECT (Old User -> Dashboard, New User -> Onboarding)
            try {
-               // Check if user has a role set in 'profiles'
                const { data: profile } = await supabaseClient
                    .from('profiles')
                    .select('role')
                    .eq('id', result.data.user.id)
                    .single();
 
-               // If Role exists -> Dashboard, Else -> Onboarding
                if (profile && profile.role) {
                    setTimeout(() => window.location.href = "/dashboard", 1000);
                } else {
                    setTimeout(() => window.location.href = "/onboarding", 1000);
                }
            } catch (err) {
-               // Fallback: If error checking profile, go to Onboarding
                setTimeout(() => window.location.href = "/onboarding", 1000);
            }
         }
@@ -313,6 +319,7 @@ LOGIN_HTML = """
       }
     }
 
+    // --- 3. UI HELPERS ---
     function setLoading(state) {
       isProcessing = state;
       document.getElementById('btnText').style.display = state ? 'none' : 'block';
@@ -330,7 +337,9 @@ LOGIN_HTML = """
     }
 
     function shakeCard() {
-        if(typeof gsap !== 'undefined') gsap.to(".auth-card", { x: -10, duration: 0.1, repeat: 3, yoyo: true });
+        if(typeof gsap !== 'undefined') {
+            gsap.to(".auth-card", { x: -10, duration: 0.1, repeat: 3, yoyo: true });
+        }
     }
   </script>
 </body>
