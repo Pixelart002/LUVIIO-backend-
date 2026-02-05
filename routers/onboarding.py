@@ -17,66 +17,35 @@ ONBOARDING_HTML = """
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    :root { 
-      --bg: #050505; --card: #0f0f0f; --border: #27272a; 
-      --text: #fff; --text-dim: #888; --accent: #3b82f6; 
-    }
+    :root { --bg: #050505; --card: #0f0f0f; --border: #27272a; --text: #fff; --text-dim: #888; --accent: #3b82f6; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-    
     body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; padding: 20px; overflow: hidden; }
 
-    /* LOADING OVERLAY */
-    #auth-loader {
-        position: fixed; inset: 0; background: #000; z-index: 9999;
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        transition: opacity 0.5s;
-    }
+    /* LOADER */
+    #auth-loader { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s; }
     .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s infinite linear; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ERROR BUTTON */
-    #reset-btn {
-        display: none; margin-top: 20px; padding: 10px 20px;
-        background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer;
-    }
 
     /* WIZARD UI */
     .progress-container { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #222; }
     .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
     .wizard-container { width: 100%; max-width: 500px; position: relative; min-height: 500px; perspective: 1000px; display: none; }
-
-    .step-card {
-      position: absolute; top: 0; left: 0; width: 100%;
-      background: var(--card); border: 1px solid var(--border); border-radius: 20px;
-      padding: 30px; opacity: 0; visibility: hidden; transform: translateX(50px);
-      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    }
+    .step-card { position: absolute; top: 0; left: 0; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 30px; opacity: 0; visibility: hidden; transform: translateX(50px); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
     .step-card.active { position: relative; opacity: 1; visibility: visible; transform: translateX(0); }
-
     h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
     .label { display: block; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 20px; }
-
-    input, select, textarea {
-      width: 100%; padding: 14px; background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border); border-radius: 12px; color: white;
-      font-size: 1rem; outline: none; transition: 0.3s; margin-bottom: 10px;
-    }
+    
+    input, select, textarea { width: 100%; padding: 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 12px; color: white; font-size: 1rem; outline: none; transition: 0.3s; margin-bottom: 10px; }
     input:focus, select:focus { border-color: var(--accent); background: rgba(255,255,255,0.08); }
 
     .radio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-    .radio-card {
-      padding: 20px; border: 1px solid var(--border); border-radius: 12px;
-      cursor: pointer; text-align: center; transition: 0.3s;
-    }
+    .radio-card { padding: 20px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; text-align: center; transition: 0.3s; }
     .radio-card:hover { background: rgba(255,255,255,0.05); }
     .radio-card.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
     .radio-icon { font-size: 1.5rem; margin-bottom: 5px; color: #ccc; }
 
     .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
-    .btn-next {
-      background: #fff; color: #000; border: none; padding: 12px 30px;
-      border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s; opacity: 0.5; pointer-events: none;
-    }
+    .btn-next { background: #fff; color: #000; border: none; padding: 12px 30px; border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s; opacity: 0.5; pointer-events: none; }
     .btn-next.enabled { opacity: 1; pointer-events: all; }
     .btn-back { color: var(--text-dim); cursor: pointer; font-size: 0.9rem; }
   </style>
@@ -85,8 +54,7 @@ ONBOARDING_HTML = """
 
   <div id="auth-loader">
     <div class="spinner"></div>
-    <p id="status-text" style="margin-top:15px; color:#666; font-size:0.9rem;">Connecting to secure server...</p>
-    <button id="reset-btn" onclick="hardReset()">Stuck? Click to Reset</button>
+    <p id="loading-text" style="margin-top:15px; color:#666; font-size:0.9rem;">Finalizing secure login...</p>
   </div>
 
   <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
@@ -105,12 +73,10 @@ ONBOARDING_HTML = """
       <span class="label">Are you here to buy/rent or to sell/list?</span>
       <div class="radio-grid">
         <div class="radio-card" onclick="selectRole('buyer', this)">
-          <div class="radio-icon"><i class="ri-shopping-bag-3-line"></i></div>
-          <span>Buyer / Renter</span>
+          <div class="radio-icon"><i class="ri-shopping-bag-3-line"></i></div><span>Buyer / Renter</span>
         </div>
         <div class="radio-card" onclick="selectRole('seller', this)">
-          <div class="radio-icon"><i class="ri-store-2-line"></i></div>
-          <span>Seller / Agent</span>
+          <div class="radio-icon"><i class="ri-store-2-line"></i></div><span>Seller / Agent</span>
         </div>
       </div>
       <div class="actions">
@@ -136,10 +102,8 @@ ONBOARDING_HTML = """
     <div class="step-card" id="step4">
       <h2>Store Details</h2>
       <span class="label">Tell us about your business entity.</span>
-      <label style="font-size:0.8rem; color:#666;">Store/Agency Name</label>
-      <input type="text" id="storeName" placeholder="e.g. Sharma Estates" oninput="validate(4)">
-      <label style="font-size:0.8rem; color:#666; margin-top:10px; display:block">Store Address</label>
-      <textarea id="storeAddress" rows="2" placeholder="Full business address..." oninput="validate(4)"></textarea>
+      <input type="text" id="storeName" placeholder="Agency Name" oninput="validate(4)">
+      <textarea id="storeAddress" rows="2" placeholder="Address..." oninput="validate(4)"></textarea>
       <div class="actions">
         <div class="btn-back" onclick="prevStep(3)">Back</div>
         <button class="btn-next" id="btn4" onclick="nextStep(5)">Next</button>
@@ -157,7 +121,7 @@ ONBOARDING_HTML = """
       </select>
       <div class="actions">
         <div class="btn-back" onclick="prevStep(4)">Back</div>
-        <button class="btn-next" id="btn5" onclick="submitData()">Finish Setup</button>
+        <button class="btn-next" id="btn5" onclick="submitData()">Finish</button>
       </div>
     </div>
   </div>
@@ -170,59 +134,73 @@ ONBOARDING_HTML = """
     let currentUser = null;
     let formData = { fullName: '', role: '', source: '', storeName: '', storeAddress: '', storeContact: '', category: '' };
 
-    // --- FORCE INIT LOGIC ---
+    // --- 🔥 THE FIX: MANUAL HASH PARSING ---
     async function init() {
-        console.log("Checking session...");
+        console.log("Initializing...");
 
-        // 1. Timeout Fallback (Agar 5 sec me kuch na ho)
-        setTimeout(() => {
-            if (!currentUser) {
-                document.getElementById('status-text').innerText = "Taking longer than usual...";
-                document.getElementById('reset-btn').style.display = 'block';
+        // 1. Check URL Hash for Access Token (Manual Override)
+        const hash = window.location.hash;
+        if (hash && hash.includes('access_token')) {
+            console.log("Token found in URL, forcing session...");
+            
+            // Extract tokens manually
+            const params = new URLSearchParams(hash.substring(1)); // Remove '#'
+            const access_token = params.get('access_token');
+            const refresh_token = params.get('refresh_token');
+
+            if (access_token) {
+                // Force Supabase to set session
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: access_token,
+                    refresh_token: refresh_token || ''
+                });
+                
+                if (!error) {
+                    // Clean URL
+                    window.history.replaceState(null, null, window.location.pathname);
+                    handleSessionFound(data.session);
+                    return;
+                }
             }
-        }, 5000);
+        }
 
-        // 2. Direct Session Check (Fastest)
+        // 2. Standard Session Check
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session) {
             handleSessionFound(session);
         } else {
-            // 3. Listener (Backup)
+            // Wait for Listener
             supabase.auth.onAuthStateChange((event, session) => {
                 if (session) handleSessionFound(session);
             });
+            
+            // Timeout Fallback
+            setTimeout(() => {
+                if(!currentUser) {
+                    alert("Login Timeout. Please try again.");
+                    window.location.href = '/';
+                }
+            }, 8000);
         }
     }
 
     async function handleSessionFound(session) {
-        if (currentUser) return; // Already loaded
+        if (currentUser) return;
         currentUser = session.user;
-        console.log("User found:", currentUser.id);
+        console.log("Session Active:", currentUser.id);
 
-        // Hide Loader
         document.getElementById('auth-loader').style.display = 'none';
         document.getElementById('wizard').style.display = 'block';
-        
-        // Animation
         gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
 
-        // Check Profile
+        // Check if already onboarded
         const { data } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
         if (data && data.role) {
             window.location.href = '/dashboard';
         }
     }
 
-    window.hardReset = async function() {
-        await supabase.auth.signOut();
-        localStorage.clear();
-        window.location.href = '/';
-    }
-
-    init();
-
-    // --- UI LOGIC ---
+    // --- UI HELPERS ---
     window.validate = function(step) {
       let isValid = false;
       const btn = document.getElementById(`btn${step}`);
@@ -230,7 +208,6 @@ ONBOARDING_HTML = """
       if (step === 3) isValid = document.getElementById('source').value !== "";
       if (step === 4) isValid = document.getElementById('storeName').value.length > 2 && document.getElementById('storeAddress').value.length > 5;
       if (step === 5) isValid = document.getElementById('storeContact').value.length > 5 && document.getElementById('category').value !== "";
-      
       if(isValid) btn.classList.add('enabled'); else btn.classList.remove('enabled');
     }
 
@@ -239,6 +216,12 @@ ONBOARDING_HTML = """
       document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
       el.classList.add('selected');
       document.getElementById('btn2').classList.add('enabled');
+    }
+    
+    window.handleRoleNext = function() { if(formData.role) nextStep(3); }
+    window.handleSourceNext = function() {
+       formData.source = document.getElementById('source').value;
+       if(formData.role === 'buyer') submitData(); else nextStep(4);
     }
 
     window.nextStep = function(target) {
@@ -260,12 +243,6 @@ ONBOARDING_HTML = """
         prev.style.visibility = 'visible'; prev.classList.add('active');
         gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
       }});
-    }
-
-    window.handleRoleNext = function() { if(formData.role) nextStep(3); }
-    window.handleSourceNext = function() {
-       formData.source = document.getElementById('source').value;
-       if(formData.role === 'buyer') submitData(); else nextStep(4);
     }
 
     window.submitData = async function() {
@@ -291,6 +268,8 @@ ONBOARDING_HTML = """
             alert("Error: " + err.message); btn.innerText = "Try Again";
         }
     }
+    
+    init();
   </script>
 </body>
 </html>
