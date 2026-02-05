@@ -25,17 +25,26 @@ ONBOARDING_HTML = """
     
     body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; padding: 20px; overflow: hidden; }
 
+    /* LOADING OVERLAY (Crucial for OAuth Redirects) */
+    #auth-loader {
+        position: fixed; inset: 0; background: #000; z-index: 9999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        transition: opacity 0.5s;
+    }
+    .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s infinite linear; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* PROGRESS BAR */
     .progress-container { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #222; }
     .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
 
     /* FORM CONTAINER */
-    .wizard-container { width: 100%; max-width: 500px; position: relative; min-height: 400px; perspective: 1000px; }
+    .wizard-container { width: 100%; max-width: 500px; position: relative; min-height: 500px; perspective: 1000px; display: none; }
 
     .step-card {
       position: absolute; top: 0; left: 0; width: 100%;
       background: var(--card); border: 1px solid var(--border); border-radius: 20px;
-      padding: 40px; opacity: 0; visibility: hidden; transform: translateX(50px);
+      padding: 30px; opacity: 0; visibility: hidden; transform: translateX(50px);
       box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
     .step-card.active { position: relative; opacity: 1; visibility: visible; transform: translateX(0); }
@@ -51,7 +60,7 @@ ONBOARDING_HTML = """
     }
     input:focus, select:focus { border-color: var(--accent); background: rgba(255,255,255,0.08); }
 
-    /* RADIO CARDS (For Role) */
+    /* RADIO CARDS */
     .radio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
     .radio-card {
       padding: 20px; border: 1px solid var(--border); border-radius: 12px;
@@ -65,31 +74,34 @@ ONBOARDING_HTML = """
     .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
     .btn-next {
       background: #fff; color: #000; border: none; padding: 12px 30px;
-      border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s;
+      border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s; opacity: 0.5; pointer-events: none;
     }
-    .btn-next:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-next.enabled { opacity: 1; pointer-events: all; }
+    
     .btn-back { color: var(--text-dim); cursor: pointer; font-size: 0.9rem; }
     .btn-back:hover { color: #fff; }
-
-    /* ERROR */
-    .error-msg { color: #ef4444; font-size: 0.85rem; margin-top: 5px; display: none; }
 
   </style>
 </head>
 <body>
 
+  <div id="auth-loader">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; color:#666; font-size:0.9rem;">Securing workspace...</p>
+  </div>
+
   <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
 
   <div class="grid-bg"></div>
 
-  <div class="wizard-container">
+  <div class="wizard-container" id="wizard">
     
     <div class="step-card active" id="step1">
       <h2>Q1. Who are you?</h2>
       <span class="label">Let's start with your official name.</span>
-      <input type="text" id="fullName" placeholder="e.g. Rahul Sharma" oninput="validate(1)">
+      <input type="text" id="fullName" placeholder="e.g. Rahul Sharma" oninput="validate(1)" onkeyup="validate(1)">
       <div class="actions" style="justify-content: flex-end;">
-        <button class="btn-next" id="btn1" onclick="nextStep(2)" disabled>Next</button>
+        <button class="btn-next" id="btn1" onclick="nextStep(2)">Next</button>
       </div>
     </div>
 
@@ -108,7 +120,7 @@ ONBOARDING_HTML = """
       </div>
       <div class="actions">
         <div class="btn-back" onclick="prevStep(1)">Back</div>
-        <button class="btn-next" id="btn2" onclick="handleRoleNext()" disabled>Next</button>
+        <button class="btn-next" id="btn2" onclick="handleRoleNext()">Next</button>
       </div>
     </div>
 
@@ -124,7 +136,7 @@ ONBOARDING_HTML = """
       </select>
       <div class="actions">
         <div class="btn-back" onclick="prevStep(2)">Back</div>
-        <button class="btn-next" id="btn3" onclick="handleSourceNext()" disabled>Next</button>
+        <button class="btn-next" id="btn3" onclick="handleSourceNext()">Next</button>
       </div>
     </div>
 
@@ -136,12 +148,11 @@ ONBOARDING_HTML = """
       <input type="text" id="storeName" placeholder="e.g. Sharma Estates" oninput="validate(4)">
       
       <label style="font-size:0.8rem; color:#666; margin-top:10px; display:block">Q5. Store Address</label>
-      <textarea id="storeAddress" rows="2" placeholder="Full business address..." oninput="validate(4)" 
-        style="width:100%; padding:14px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:12px; color:white;"></textarea>
+      <textarea id="storeAddress" rows="2" placeholder="Full business address..." oninput="validate(4)"></textarea>
 
       <div class="actions">
         <div class="btn-back" onclick="prevStep(3)">Back</div>
-        <button class="btn-next" id="btn4" onclick="nextStep(5)" disabled>Next</button>
+        <button class="btn-next" id="btn4" onclick="nextStep(5)">Next</button>
       </div>
     </div>
 
@@ -173,31 +184,52 @@ ONBOARDING_HTML = """
   </div>
 
   <script>
-    // --- CONFIG ---
     const SB_URL = 'https://enqcujmzxtrbfkaungpm.supabase.co';
     const SB_KEY = 'sb_publishable_0jeCSzd3NkL-RlQn8X-eTA_-xH03xVd';
     const supabase = supabase.createClient(SB_URL, SB_KEY);
 
-    // --- STATE ---
-    let formData = {
-      fullName: '',
-      role: '',
-      source: '',
-      storeName: '',
-      storeAddress: '',
-      storeContact: '',
-      category: ''
-    };
+    let currentUser = null;
+    let formData = { fullName: '', role: '', source: '', storeName: '', storeAddress: '', storeContact: '', category: '' };
 
-    // --- ANIMATION ---
-    document.addEventListener("DOMContentLoaded", () => {
-      gsap.to("#step1", { opacity: 1, x: 0, duration: 0.6 });
-    });
+    // --- 1. ROBUST INIT (Handles Redirects Correctly) ---
+    async function init() {
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session) {
+                currentUser = session.user;
+                
+                // Hide loader, Show Wizard
+                document.getElementById('auth-loader').style.display = 'none';
+                document.getElementById('wizard').style.display = 'block';
+                
+                // Animation Entry
+                gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
+                
+                // Gatekeeper: Check if already onboarded
+                checkIfOnboarded(currentUser.id);
+            } else {
+                // If no session after 3 seconds, send back to login
+                setTimeout(() => {
+                    if(!currentUser) window.location.href = '/'; 
+                }, 3000);
+            }
+        });
+    }
 
-    // --- VALIDATION & NAVIGATION ---
-    function validate(step) {
+    async function checkIfOnboarded(userId) {
+        const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
+        if (data && data.role) {
+            window.location.href = '/dashboard'; 
+        }
+    }
+    
+    init();
+
+    // --- 2. VALIDATION (Fixed Button States) ---
+    window.validate = function(step) {
       let isValid = false;
-      if (step === 1) isValid = document.getElementById('fullName').value.length > 2;
+      const btn = document.getElementById(`btn${step}`);
+      
+      if (step === 1) isValid = document.getElementById('fullName').value.trim().length > 2;
       if (step === 3) isValid = document.getElementById('source').value !== "";
       if (step === 4) {
         isValid = document.getElementById('storeName').value.length > 2 && 
@@ -208,66 +240,68 @@ ONBOARDING_HTML = """
                   document.getElementById('category').value !== "";
       }
       
-      document.getElementById(`btn${step}`).disabled = !isValid;
+      // Use CSS class for enabling/disabling instead of attribute
+      if(isValid) btn.classList.add('enabled');
+      else btn.classList.remove('enabled');
     }
 
-    function selectRole(role, el) {
+    window.selectRole = function(role, el) {
       formData.role = role;
       document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
       el.classList.add('selected');
-      document.getElementById('btn2').disabled = false;
+      document.getElementById('btn2').classList.add('enabled');
     }
 
-    function handleRoleNext() {
-      // Save Role Logic
+    // --- 3. NAVIGATION LOGIC ---
+    window.handleRoleNext = function() {
+      if(!formData.role) return;
       nextStep(3);
     }
 
-    function handleSourceNext() {
+    window.handleSourceNext = function() {
       formData.source = document.getElementById('source').value;
-      
       if (formData.role === 'buyer') {
-        // Buyers skip store details -> Submit directly
-        submitData(); 
+        submitData(); // Buyers finish early
       } else {
-        // Sellers go to Step 4
-        nextStep(4);
+        nextStep(4); // Sellers continue
       }
     }
 
-    function nextStep(target) {
+    window.nextStep = function(target) {
       const current = document.querySelector('.step-card.active');
       const next = document.getElementById(`step${target}`);
       
-      // Update Progress
-      const progress = (target / 5) * 100;
-      document.getElementById('progressBar').style.width = `${progress}%`;
+      document.getElementById('progressBar').style.width = `${(target/5)*100}%`;
 
-      gsap.to(current, { x: -50, opacity: 0, duration: 0.4, onComplete: () => {
+      gsap.to(current, { x: -50, opacity: 0, duration: 0.3, onComplete: () => {
         current.classList.remove('active');
         current.style.visibility = 'hidden';
         next.style.visibility = 'visible';
         next.classList.add('active');
-        gsap.fromTo(next, { x: 50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4 });
+        gsap.fromTo(next, { x: 50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
       }});
     }
 
-    function prevStep(target) {
+    window.prevStep = function(target) {
       const current = document.querySelector('.step-card.active');
       const prev = document.getElementById(`step${target}`);
       
-      gsap.to(current, { x: 50, opacity: 0, duration: 0.4, onComplete: () => {
+      gsap.to(current, { x: 50, opacity: 0, duration: 0.3, onComplete: () => {
         current.classList.remove('active');
         current.style.visibility = 'hidden';
         prev.style.visibility = 'visible';
         prev.classList.add('active');
-        gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4 });
+        gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
       }});
     }
 
-    // --- FINAL SUBMISSION (DOUBLE CHECKED) ---
-    async function submitData() {
-      // 1. Gather Data
+    // --- 4. SUBMIT LOGIC ---
+    window.submitData = async function() {
+      if(!currentUser) return alert("Session expired. Please login again.");
+      
+      const btn = document.getElementById('btn5') || document.getElementById('btn3');
+      btn.innerText = "Setting up...";
+      
       formData.fullName = document.getElementById('fullName').value;
       if(formData.role === 'seller') {
         formData.storeName = document.getElementById('storeName').value;
@@ -277,43 +311,32 @@ ONBOARDING_HTML = """
       }
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Authentication failed");
-
-        // 2. Update PROFILE (Q1, Q2, Q3)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
+        // Update Profile
+        const { error: pErr } = await supabase.from('profiles').update({
             full_name: formData.fullName,
             role: formData.role,
             referral_source: formData.source
-          })
-          .eq('id', user.id);
+        }).eq('id', currentUser.id);
+        if(pErr) throw pErr;
 
-        if (profileError) throw profileError;
-
-        // 3. If SELLER -> Insert into STORES (Q4, Q5, Q6, Q7)
-        if (formData.role === 'seller') {
-          const { error: storeError } = await supabase
-            .from('stores')
-            .insert([{
-              owner_id: user.id,
-              store_name: formData.storeName,
-              address: formData.storeAddress,
-              contact_email: formData.storeContact, // Assuming mixed field
-              category: formData.category,
-              plan_type: 'free_tier' // Default
-            }]);
-          
-          if (storeError) throw storeError;
+        // Insert Store
+        if(formData.role === 'seller') {
+          const { error: sErr } = await supabase.from('stores').insert([{
+            owner_id: currentUser.id,
+            store_name: formData.storeName,
+            address: formData.storeAddress,
+            contact_email: formData.storeContact,
+            category: formData.category
+          }]);
+          if(sErr) throw sErr;
         }
 
-        // 4. Success -> Redirect
         window.location.href = '/dashboard';
 
       } catch (err) {
         console.error(err);
-        alert("Setup Error: " + err.message);
+        alert("Setup failed: " + err.message);
+        btn.innerText = "Try Again";
       }
     }
   </script>
