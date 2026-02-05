@@ -11,31 +11,183 @@ ONBOARDING_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Setup Profile - Luviio</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    /* (keep your original CSS unchanged) */
+    /* 2. CSS RESTORED (Ye zaroori hai white screen hatane ke liye) */
+    :root { 
+      --bg: #050505; --card: #0f0f0f; --border: #27272a; 
+      --text: #fff; --text-dim: #888; --accent: #3b82f6; 
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    
+    body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; padding: 20px; overflow: hidden; }
+
+    /* LOADER */
+    #auth-loader {
+        position: fixed; inset: 0; background: #000; z-index: 9999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        transition: opacity 0.5s;
+    }
+    .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s infinite linear; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ERROR BUTTON */
+    #reset-btn {
+        display: none; margin-top: 20px; padding: 10px 20px;
+        background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer;
+    }
+
+    /* WIZARD UI */
+    .progress-container { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #222; }
+    .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease; }
+    .wizard-container { width: 100%; max-width: 500px; position: relative; min-height: 500px; perspective: 1000px; display: none; }
+
+    .step-card {
+      position: absolute; top: 0; left: 0; width: 100%;
+      background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+      padding: 30px; opacity: 0; visibility: hidden; transform: translateX(50px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .step-card.active { position: relative; opacity: 1; visibility: visible; transform: translateX(0); }
+
+    h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; }
+    .label { display: block; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 20px; }
+
+    /* Inputs & Form Elements */
+    input, select, textarea {
+      width: 100%; padding: 14px; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border); border-radius: 12px; color: white;
+      font-size: 1rem; outline: none; transition: 0.3s; margin-bottom: 10px;
+    }
+    input:focus, select:focus { border-color: var(--accent); background: rgba(255,255,255,0.08); }
+
+    .radio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+    .radio-card {
+      padding: 20px; border: 1px solid var(--border); border-radius: 12px;
+      cursor: pointer; text-align: center; transition: 0.3s;
+    }
+    .radio-card:hover { background: rgba(255,255,255,0.05); }
+    .radio-card.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
+    .radio-icon { font-size: 1.5rem; margin-bottom: 5px; color: #ccc; }
+
+    /* Buttons */
+    .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+    .btn-next {
+      background: #fff; color: #000; border: none; padding: 12px 30px;
+      border-radius: 50px; font-weight: 600; cursor: pointer; transition: 0.3s; opacity: 0.5; pointer-events: none;
+    }
+    .btn-next.enabled { opacity: 1; pointer-events: all; }
+    .btn-back { color: var(--text-dim); cursor: pointer; font-size: 0.9rem; }
   </style>
 </head>
 <body>
 
-  <!-- (keep your original HTML body unchanged) -->
+  <div id="auth-loader">
+    <div class="spinner"></div>
+    <p id="status-text" style="margin-top:15px; color:#666; font-size:0.9rem;">Securing your workspace...</p>
+    <button id="reset-btn" onclick="hardReset()">Stuck? Click to Restart</button>
+  </div>
+
+  <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
+
+  <div class="wizard-container" id="wizard">
+    
+    <div class="step-card active" id="step1">
+      <h2>Q1. Who are you?</h2>
+      <span class="label">Let's start with your official name.</span>
+      <input type="text" id="fullName" placeholder="e.g. Rahul Sharma" oninput="validate(1)" onkeyup="validate(1)">
+      <div class="actions" style="justify-content: flex-end;">
+        <button class="btn-next" id="btn1" onclick="nextStep(2)">Next</button>
+      </div>
+    </div>
+
+    <div class="step-card" id="step2">
+      <h2>Q2. What is your purpose?</h2>
+      <span class="label">Are you here to buy/rent or to sell/list?</span>
+      <div class="radio-grid">
+        <div class="radio-card" onclick="selectRole('buyer', this)">
+          <div class="radio-icon"><i class="ri-shopping-bag-3-line"></i></div>
+          <span>Buyer / Renter</span>
+        </div>
+        <div class="radio-card" onclick="selectRole('seller', this)">
+          <div class="radio-icon"><i class="ri-store-2-line"></i></div>
+          <span>Seller / Agent</span>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="btn-back" onclick="prevStep(1)">Back</div>
+        <button class="btn-next" id="btn2" onclick="handleRoleNext()">Next</button>
+      </div>
+    </div>
+
+    <div class="step-card" id="step3">
+      <h2>Q3. Where did you hear about us?</h2>
+      <span class="label">Help us know how you found Luviio.</span>
+      <select id="source" onchange="validate(3)">
+        <option value="" disabled selected>Select an option</option>
+        <option value="social_media">Social Media (Insta/X)</option>
+        <option value="browser">Search Engine (Google)</option>
+        <option value="friend">Friend / Referral</option>
+        <option value="other">Other</option>
+      </select>
+      <div class="actions">
+        <div class="btn-back" onclick="prevStep(2)">Back</div>
+        <button class="btn-next" id="btn3" onclick="handleSourceNext()">Next</button>
+      </div>
+    </div>
+
+    <div class="step-card" id="step4">
+      <h2>Store Details</h2>
+      <span class="label">Tell us about your business entity.</span>
+      <input type="text" id="storeName" placeholder="Agency Name" oninput="validate(4)">
+      <textarea id="storeAddress" rows="2" placeholder="Address..." oninput="validate(4)"></textarea>
+      <div class="actions">
+        <div class="btn-back" onclick="prevStep(3)">Back</div>
+        <button class="btn-next" id="btn4" onclick="nextStep(5)">Next</button>
+      </div>
+    </div>
+
+    <div class="step-card" id="step5">
+      <h2>Contact & Plan</h2>
+      <span class="label">Final details.</span>
+      <input type="text" id="storeContact" placeholder="Phone/Email" oninput="validate(5)">
+      <select id="category" onchange="validate(5)">
+        <option value="" disabled selected>Select Category</option>
+        <option value="real_estate">Real Estate</option>
+        <option value="independent">Independent</option>
+        <option value="builder">Builder</option>
+      </select>
+      <div class="actions">
+        <div class="btn-back" onclick="prevStep(4)">Back</div>
+        <button class="btn-next" id="btn5" onclick="submitData()">Finish Setup</button>
+      </div>
+    </div>
+
+  </div>
 
   <script>
-    // --- 1. CONFIGURATION ---
+    // --- 3. CONFIGURATION ---
     const SB_URL = 'https://enqcujmzxtrbfkaungpm.supabase.co';
     const SB_KEY = 'sb_publishable_0jeCSzd3NkL-RlQn8X-eTA_-xH03xVd';
 
-    // Use createClient exposed by the UMD bundle
-    const supabase = supabaseJs.createClient ? supabaseJs.createClient(SB_URL, SB_KEY) : createClient(SB_URL, SB_KEY);
+    // --- 4. FIXED INITIALIZATION (White Screen Cause) ---
+    // Hum seedha window.supabase use karenge, kyunki CDN wahi provide karta hai.
+    // 'supabaseJs' naam ka variable exist nahi karta, isliye crash ho raha tha.
+    let supabaseClient;
+    try {
+        supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+    } catch (e) {
+        console.error("Supabase failed to load", e);
+        document.body.innerHTML = "<h2 style='color:white'>Error: Script failed to load. Please refresh.</h2>";
+    }
 
     let currentUser = null;
     let formData = { fullName: '', role: '', source: '', storeName: '', storeAddress: '', storeContact: '', category: '' };
 
-    // helper to hide loader with fade
     function hideLoader() {
       const loader = document.getElementById('auth-loader');
       loader.style.opacity = '0';
@@ -45,7 +197,6 @@ ONBOARDING_HTML = """
     async function init() {
         console.log("Initializing Onboarding...");
 
-        // Safety Timeout: If loading takes >5 seconds, show reset button
         setTimeout(() => {
             if (!currentUser) {
                 const st = document.getElementById('status-text');
@@ -55,7 +206,7 @@ ONBOARDING_HTML = """
             }
         }, 5000);
 
-        // A. Check URL Hash for Access Token (Manual Override)
+        // A. Hash Check
         const hash = window.location.hash || '';
         if (hash && hash.includes('access_token')) {
             try {
@@ -64,7 +215,7 @@ ONBOARDING_HTML = """
                 const refresh_token = params.get('refresh_token');
 
                 if (access_token) {
-                    const { data, error } = await supabase.auth.setSession({
+                    const { data, error } = await supabaseClient.auth.setSession({
                         access_token: access_token,
                         refresh_token: refresh_token || ''
                     });
@@ -73,32 +224,23 @@ ONBOARDING_HTML = """
                         window.history.replaceState(null, null, window.location.pathname);
                         handleSessionFound(data.session);
                         return;
-                    } else {
-                        console.warn('setSession error', error);
                     }
                 }
-            } catch (e) {
-                console.error('Hash parsing failed', e);
-            }
+            } catch (e) { console.error('Hash parsing failed', e); }
         }
 
-        // B. Standard Session Check
+        // B. Standard Check
         try {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (error) console.warn('getSession error', error);
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
             if (session) {
                 handleSessionFound(session);
             } else {
-                // C. Listener (Backup)
-                supabase.auth.onAuthStateChange((event, session) => {
+                supabaseClient.auth.onAuthStateChange((event, session) => {
                     if (session) handleSessionFound(session);
                 });
             }
-        } catch (e) {
-            console.error('Session check failed', e);
-        }
+        } catch (e) { console.error('Session check failed', e); }
 
-        // initial validation for autofill
         validate(1);
     }
 
@@ -109,29 +251,32 @@ ONBOARDING_HTML = """
 
         hideLoader();
         document.getElementById('wizard').style.display = 'block';
-        gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
+        if(typeof gsap !== 'undefined') {
+            gsap.to("#step1", { opacity: 1, x: 0, duration: 0.5 });
+        } else {
+            document.getElementById('step1').style.opacity = 1;
+            document.getElementById('step1').style.visibility = 'visible';
+            document.getElementById('step1').style.transform = 'translateX(0)';
+        }
 
-        // Gatekeeper: If already onboarded, go to Dashboard
+        // Gatekeeper
         try {
-            const { data, error } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+            const { data, error } = await supabaseClient.from('profiles').select('role').eq('id', currentUser.id).single();
             if (!error && data && data.role) {
                 window.location.href = '/dashboard';
-            } else {
-                console.log('No profile role found or error', error);
             }
-        } catch(e) { console.log("New user detected", e); }
+        } catch(e) { console.log("New user detected"); }
     }
 
-    // Safety Reset Function
     window.hardReset = async function() {
-        try { await supabase.auth.signOut(); } catch(e){ console.warn(e); }
+        try { await supabaseClient.auth.signOut(); } catch(e){ console.warn(e); }
         localStorage.clear();
         window.location.href = '/';
     }
 
-    init(); // Start logic
+    init();
 
-    // --- 3. UI & FORM LOGIC ---
+    // --- FORM LOGIC ---
     window.validate = function(step) {
       let isValid = false;
       const btn = document.getElementById(`btn${step}`);
@@ -177,13 +322,23 @@ ONBOARDING_HTML = """
 
       document.getElementById('progressBar').style.width = `${(target/5)*100}%`;
 
-      gsap.to(current, { x: -50, opacity: 0, duration: 0.3, onComplete: () => {
-        current.classList.remove('active');
-        current.style.visibility = 'hidden';
-        next.style.visibility = 'visible';
-        next.classList.add('active');
-        gsap.fromTo(next, { x: 50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
-      }});
+      if(typeof gsap !== 'undefined') {
+          gsap.to(current, { x: -50, opacity: 0, duration: 0.3, onComplete: () => {
+            current.classList.remove('active');
+            current.style.visibility = 'hidden';
+            next.style.visibility = 'visible';
+            next.classList.add('active');
+            gsap.fromTo(next, { x: 50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
+          }});
+      } else {
+          // Fallback if GSAP fails
+          current.classList.remove('active');
+          current.style.visibility = 'hidden';
+          next.style.visibility = 'visible';
+          next.classList.add('active');
+          next.style.opacity = 1;
+          next.style.transform = 'translateX(0)';
+      }
     }
 
     window.prevStep = function(target) {
@@ -191,20 +346,28 @@ ONBOARDING_HTML = """
       const prev = document.getElementById(`step${target}`);
       if(!current || !prev) return;
 
-      gsap.to(current, { x: 50, opacity: 0, duration: 0.3, onComplete: () => {
-        current.classList.remove('active');
-        current.style.visibility = 'hidden';
-        prev.style.visibility = 'visible';
-        prev.classList.add('active');
-        gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
-      }});
+      if(typeof gsap !== 'undefined') {
+          gsap.to(current, { x: 50, opacity: 0, duration: 0.3, onComplete: () => {
+            current.classList.remove('active');
+            current.style.visibility = 'hidden';
+            prev.style.visibility = 'visible';
+            prev.classList.add('active');
+            gsap.fromTo(prev, { x: -50, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
+          }});
+      } else {
+           current.classList.remove('active');
+           current.style.visibility = 'hidden';
+           prev.style.visibility = 'visible';
+           prev.classList.add('active');
+           prev.style.opacity = 1;
+           prev.style.transform = 'translateX(0)';
+      }
     }
 
     window.submitData = async function() {
         if(!currentUser) return alert("Session lost. Please refresh.");
 
         const btn = document.getElementById('btn5') || document.getElementById('btn3');
-        if(!btn) return alert('Button not found');
         const originalText = btn.innerText;
         btn.innerText = "Saving...";
 
@@ -217,7 +380,7 @@ ONBOARDING_HTML = """
         }
 
         try {
-            const { error: pErr } = await supabase.from('profiles').update({
+            const { error: pErr } = await supabaseClient.from('profiles').update({
                 full_name: formData.fullName,
                 role: formData.role,
                 referral_source: formData.source
@@ -226,7 +389,7 @@ ONBOARDING_HTML = """
             if(pErr) throw pErr;
 
             if(formData.role === 'seller') {
-                const { error: sErr } = await supabase.from('stores').insert([{
+                const { error: sErr } = await supabaseClient.from('stores').insert([{
                     owner_id: currentUser.id,
                     store_name: formData.storeName,
                     address: formData.storeAddress,
@@ -240,7 +403,7 @@ ONBOARDING_HTML = """
 
         } catch (err) {
             console.error(err);
-            alert("Error: " + (err.message || JSON.stringify(err)));
+            alert("Error: " + (err.message || "Unknown error"));
             btn.innerText = originalText;
         }
     }
