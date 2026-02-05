@@ -214,9 +214,12 @@ LOGIN_HTML = """
     let isProcessing = false;
 
     document.addEventListener("DOMContentLoaded", () => {
+        // Init Supabase
         if(typeof supabase !== 'undefined') {
             supabaseClient = supabase.createClient(SB_URL, SB_KEY);
         }
+        
+        // Entrance Animation
         if(typeof gsap !== 'undefined') {
             gsap.to("#authCard", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" });
         } else {
@@ -229,8 +232,8 @@ LOGIN_HTML = """
     async function signInWithProvider(providerName) {
       if(!supabaseClient) return;
       try {
-        // 🔥 UPDATED: Redirect to Onboarding FIRST. 
-        // This fixes the 'localhost:3000' issue and ensures new users go to setup.
+        // 🔥 CRITICAL UPDATE: Always point to Onboarding first. 
+        // This ensures the URL whitelist check passes.
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
           provider: providerName,
           options: { redirectTo: window.location.origin + '/onboarding' }
@@ -246,9 +249,11 @@ LOGIN_HTML = """
       const prompt = isSignUp ? "Already have an account?" : "Don't have an account?";
       const link = isSignUp ? "Log in" : "Sign up";
 
+      // Smooth transition
       if(typeof gsap !== 'undefined') {
           gsap.fromTo(".header", {opacity:0, y:-10}, {opacity:1, y:0, duration:0.3});
       }
+
       document.getElementById('formSubtitle').innerText = title;
       document.getElementById('btnText').innerText = btn;
       document.getElementById('footerPrompt').innerText = prompt;
@@ -258,6 +263,8 @@ LOGIN_HTML = """
     async function handleAuth(e) {
       e.preventDefault();
       if (isProcessing) return;
+      
+      // Honeypot check
       if (document.getElementById('_hp_check').value) return; 
       
       const email = document.getElementById('email').value.trim();
@@ -265,7 +272,8 @@ LOGIN_HTML = """
 
       if (password.length < 6) { 
           showToast("Password must be at least 6 characters.", "error"); 
-          shakeCard(); return; 
+          shakeCard();
+          return; 
       }
       
       setLoading(true);
@@ -275,7 +283,7 @@ LOGIN_HTML = """
 
         let result;
         if (isSignUp) {
-          // 🔥 UPDATED: New Signups go to Onboarding
+          // 🔥 SignUp Redirect -> Onboarding
           result = await supabaseClient.auth.signUp({ 
             email, password, options: { emailRedirectTo: window.location.origin + '/onboarding' }
           });
@@ -291,7 +299,7 @@ LOGIN_HTML = """
         } else {
            showToast("Access Granted.", "success");
            
-           // 🔥 SMART REDIRECT (Old User -> Dashboard, New User -> Onboarding)
+           // 🔥 INTELLIGENT REDIRECT (User Role Check) 🔥
            try {
                const { data: profile } = await supabaseClient
                    .from('profiles')
@@ -299,12 +307,14 @@ LOGIN_HTML = """
                    .eq('id', result.data.user.id)
                    .single();
 
+               // If Role exists -> Dashboard, Else -> Onboarding
                if (profile && profile.role) {
                    setTimeout(() => window.location.href = "/dashboard", 1000);
                } else {
                    setTimeout(() => window.location.href = "/onboarding", 1000);
                }
            } catch (err) {
+               // Fallback: If error checking profile, go to Onboarding
                setTimeout(() => window.location.href = "/onboarding", 1000);
            }
         }
@@ -330,10 +340,14 @@ LOGIN_HTML = """
     function showToast(msg, type) {
       const toast = document.getElementById('toast');
       const icon = toast.querySelector('i');
+      
       document.getElementById('toastMsg').innerText = msg;
       toast.className = `toast visible ${type}`;
       icon.className = type === 'error' ? "ri-error-warning-fill" : "ri-checkbox-circle-fill";
-      setTimeout(() => { toast.className = "toast"; }, 4000);
+
+      setTimeout(() => {
+        toast.className = "toast"; // Hide
+      }, 4000);
     }
 
     function shakeCard() {
