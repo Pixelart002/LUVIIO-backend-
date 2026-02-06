@@ -248,11 +248,9 @@ LOGIN_HTML = """
     async function signInWithProvider(providerName) {
       if(!supabaseClient) return;
       try {
-        // CHANGED: Redirect to Dashboard. If user is new, Dashboard should handle the redirect to Onboarding.
-        // This prevents existing users from being forced to /onboarding every time.
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
           provider: providerName,
-          options: { redirectTo: window.location.origin + '/dashboard' }
+          options: { redirectTo: window.location.origin + '/onboarding' }
         });
         if (error) throw error;
       } catch (error) { showToast("Connection Error", "error"); }
@@ -298,7 +296,6 @@ LOGIN_HTML = """
 
         let result;
         if (isSignUp) {
-          // For Signup, we still redirect to onboarding to capture details initially
           result = await supabaseClient.auth.signUp({ 
             email, password, options: { emailRedirectTo: window.location.origin + '/onboarding' }
           });
@@ -313,8 +310,8 @@ LOGIN_HTML = """
            document.getElementById('authForm').reset();
         } else {
            showToast("Access Granted", "success");
-           // Redirect Logic: Check if profile exists before deciding destination
-           await checkProfileAndRedirect(result.data.user.id);
+           // Redirect Logic
+           checkProfileAndRedirect(result.data.user.id);
         }
 
       } catch (error) {
@@ -327,28 +324,16 @@ LOGIN_HTML = """
       }
     }
 
-    // --- CORE LOGIC: CHECK DB & REDIRECT ---
     async function checkProfileAndRedirect(userId) {
         try {
-            // We select 'role' (or any field you save during onboarding).
-            // If this query returns data, the user has completed onboarding.
-            const { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('role')
-                .eq('id', userId)
-                .single();
-
-            // Logic: If profile exists AND has a role, go to dashboard.
-            if (!error && profile && profile.role) {
-                setTimeout(() => window.location.href = "/dashboard", 500);
+            const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', userId).single();
+            if (profile && profile.role) {
+                setTimeout(() => window.location.href = "/dashboard", 800);
             } else {
-                // If error (row not found) or role is null, go to onboarding
-                setTimeout(() => window.location.href = "/onboarding", 500);
+                setTimeout(() => window.location.href = "/onboarding", 800);
             }
         } catch (err) {
-            console.error("Profile check error:", err);
-            // Fallback: If DB check fails, safe to assume onboarding or retry
-            setTimeout(() => window.location.href = "/onboarding", 500);
+            setTimeout(() => window.location.href = "/onboarding", 800);
         }
     }
 
