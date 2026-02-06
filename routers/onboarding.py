@@ -14,7 +14,6 @@ ONBOARDING_HTML = """
   <link rel="preconnect" href="https://enqcujmzxtrbfkaungpm.supabase.co" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  
   <link rel="prefetch" href="/dashboard">
 
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -41,7 +40,7 @@ ONBOARDING_HTML = """
       user-select: none;
     }
 
-    /* CRITICAL LOADER CSS (INLINE FOR SPEED) */
+    /* CRITICAL LOADER CSS */
     #auth-loader {
         position: fixed; inset: 0; background: #050505; z-index: 9999;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -56,7 +55,7 @@ ONBOARDING_HTML = """
     
     .status-msg { margin-top: 15px; font-size: 0.8rem; color: #666; letter-spacing: 1px; font-weight: 600; }
 
-    /* LAYOUT & WIZARD STYLES (HIDDEN INITIALLY) */
+    /* LAYOUT & WIZARD STYLES */
     .grid-bg { position: absolute; inset: 0; z-index: -1; opacity: 0.12; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 80px 80px; mask-image: radial-gradient(circle at center, black 40%, transparent 80%); }
     
     nav { width: 100%; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
@@ -65,8 +64,7 @@ ONBOARDING_HTML = """
     
     main { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 5; }
     
-    /* WIZARD CARD */
-    .wizard-wrapper { width: 100%; max-width: 480px; position: relative; display: none; } /* Hidden by default */
+    .wizard-wrapper { width: 100%; max-width: 480px; position: relative; display: none; }
     
     .step-card {
       background: var(--card-bg); border: 1px solid var(--border);
@@ -76,7 +74,6 @@ ONBOARDING_HTML = """
     }
     .step-card.active { position: relative; opacity: 1; visibility: visible; transform: translateX(0); }
 
-    /* PROGRESS & INPUTS */
     .progress-track { width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 30px; overflow: hidden; }
     .progress-fill { height: 100%; background: var(--accent); width: 20%; transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 0 0 10px var(--accent-glow); }
     
@@ -201,7 +198,7 @@ ONBOARDING_HTML = """
   <footer>&copy; 2026 Luviio. Secure.</footer>
 
   <script>
-    // --- 2. CONFIGURATION ---
+    // --- CONFIGURATION ---
     const SB_URL = 'https://enqcujmzxtrbfkaungpm.supabase.co';
     const SB_KEY = 'sb_publishable_0jeCSzd3NkL-RlQn8X-eTA_-xH03xVd';
     
@@ -209,45 +206,50 @@ ONBOARDING_HTML = """
     let currentUser = null;
     let formData = { fullName: '', role: '', source: '', storeName: '', storeAddress: '', storeContact: '', category: '' };
 
-    // --- 3. ULTRA FAST PRIORITY CHECK ---
+    // --- ULTRA FAST PRIORITY CHECK (With Metadata Logic) ---
     (async function priorityInit() {
         try {
             supabaseClient = supabase.createClient(SB_URL, SB_KEY);
 
-            // A. Check for OAuth Redirect Hash (Sabse pehle)
+            // A. Check for OAuth Redirect Hash
             const hash = window.location.hash;
             if (hash && hash.includes('access_token')) {
                 document.getElementById('status-text').innerText = "VERIFYING TOKEN...";
-                const { data, error } = await supabaseClient.auth.getSession(); // Auto-parses hash
+                const { data } = await supabaseClient.auth.getSession();
                 if (data?.session) {
-                    // Hash clean karo taki URL saaf rahe
                     window.history.replaceState(null, null, window.location.pathname);
                     await checkUserProfile(data.session.user);
                     return;
                 }
             }
 
-            // B. Check Existing Session (Agar pehle se login hai)
+            // B. Check Existing Session
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 await checkUserProfile(session.user);
             } else {
-                // Agar koi session nahi hai, to wapas Login pe bhejo
                 window.location.href = '/'; 
             }
-
         } catch (e) {
             console.error("Init Error", e);
             alert("Connection Error. Please refresh.");
         }
     })();
 
-    // --- 4. CORE LOGIC: NEW USER VS OLD USER ---
+    // --- CHECK USER LOGIC (UPDATED) ---
     async function checkUserProfile(user) {
         currentUser = user;
         document.getElementById('status-text').innerText = "CHECKING ACCOUNT STATUS...";
 
-        // OPTIMIZATION: Sirf 'role' column mango. Pura data mat mango. Fast hoga.
+        // 1. FAST TRACK: Check Metadata First (No DB Call needed if flagged)
+        if (user.user_metadata && user.user_metadata.onboarded === true) {
+             console.log("Metadata found: Fast Redirect");
+             document.getElementById('status-text').innerText = "WELCOME BACK!";
+             window.location.href = '/dashboard';
+             return;
+        }
+
+        // 2. FALLBACK: Check Database (If metadata is missing)
         const { data, error } = await supabaseClient
             .from('profiles')
             .select('role')
@@ -255,11 +257,14 @@ ONBOARDING_HTML = """
             .single();
 
         if (data && data.role) {
-            // CASE 1: PURANA USER (Data hai) -> Bhaago Dashboard
-            document.getElementById('status-text').innerText = "REDIRECTING...";
+            // User Exists but Metadata was missing -> FIX IT
+            console.log("User found in DB, updating metadata...");
+            await supabaseClient.auth.updateUser({
+                data: { onboarded: true, role: data.role }
+            });
             window.location.href = '/dashboard';
         } else {
-            // CASE 2: NEW USER (Data nahi hai) -> Onboarding dikhao
+            // New User -> Show Wizard
             revealWizard();
         }
     }
@@ -268,11 +273,9 @@ ONBOARDING_HTML = """
         const loader = document.getElementById('auth-loader');
         const wizard = document.getElementById('wizard');
         
-        // Loader fade out
         loader.style.opacity = '0';
         setTimeout(() => { loader.style.display = 'none'; }, 400);
 
-        // Wizard fade in
         wizard.style.display = 'block';
         if(typeof gsap !== 'undefined') {
             gsap.fromTo("#step1", {opacity: 0, x: 20}, {opacity: 1, x: 0, duration: 0.5});
@@ -281,7 +284,7 @@ ONBOARDING_HTML = """
         }
     }
 
-    // --- 5. FORM HANDLING (Standard Logic) ---
+    // --- FORM HANDLING ---
     window.validate = function(step) {
       let isValid = false;
       const btn = document.getElementById(`btn${step}`);
@@ -305,7 +308,6 @@ ONBOARDING_HTML = """
     window.handleSourceNext = function() {
         formData.source = document.getElementById('source').value;
         if (formData.role === 'buyer') {
-             // Buyer ko store details nahi bharni, seedha submit
              submitData(); 
         } else {
              nextStep(4);
@@ -317,42 +319,34 @@ ONBOARDING_HTML = """
       const next = document.getElementById(`step${target}`);
       if(!current || !next) return;
 
-      // Progress Bar Update
       const bar = document.querySelector('.active .progress-fill');
       if(bar) bar.style.width = `${(target/5)*100}%`;
 
       if(typeof gsap !== 'undefined') {
           gsap.to(current, { x: -30, opacity: 0, duration: 0.3, onComplete: () => {
-             current.classList.remove('active');
-             current.style.visibility = 'hidden';
-             
-             next.style.visibility = 'visible';
-             next.classList.add('active');
+             current.classList.remove('active'); current.style.visibility = 'hidden';
+             next.style.visibility = 'visible'; next.classList.add('active');
              next.querySelector('.progress-fill').style.width = `${(target/5)*100}%`;
-             
              gsap.fromTo(next, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
           }});
       } else {
-          current.classList.remove('active');
-          next.classList.add('active');
+          current.classList.remove('active'); next.classList.add('active');
       }
     }
 
     window.prevStep = function(target) {
       const current = document.querySelector('.step-card.active');
       const prev = document.getElementById(`step${target}`);
-      
       if(typeof gsap !== 'undefined') {
           gsap.to(current, { x: 30, opacity: 0, duration: 0.3, onComplete: () => {
-             current.classList.remove('active');
-             current.style.visibility = 'hidden';
-             prev.style.visibility = 'visible';
-             prev.classList.add('active');
+             current.classList.remove('active'); current.style.visibility = 'hidden';
+             prev.style.visibility = 'visible'; prev.classList.add('active');
              gsap.fromTo(prev, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 });
           }});
       }
     }
 
+    // --- SUBMIT DATA (UPDATED WITH METADATA FLAG) ---
     window.submitData = async function() {
         const btn = document.getElementById(formData.role === 'buyer' ? 'btn3' : 'btn5');
         btn.innerText = "Finishing...";
@@ -366,7 +360,7 @@ ONBOARDING_HTML = """
         }
 
         try {
-            // Profile Update (Fast)
+            // 1. Insert DB Profile
             const { error: pErr } = await supabaseClient.from('profiles').upsert({
                 id: currentUser.id,
                 full_name: formData.fullName,
@@ -376,7 +370,7 @@ ONBOARDING_HTML = """
             });
             if(pErr) throw pErr;
 
-            // Store Insert (If Seller)
+            // 2. Insert Store (If Seller)
             if(formData.role === 'seller') {
                 const { error: sErr } = await supabaseClient.from('stores').insert([{
                     owner_id: currentUser.id,
@@ -387,6 +381,11 @@ ONBOARDING_HTML = """
                 }]);
                 if(sErr) throw sErr;
             }
+
+            // 3. SET METADATA FLAG (The "Stamp") 🚀
+            await supabaseClient.auth.updateUser({
+                data: { onboarded: true, role: formData.role }
+            });
 
             window.location.href = '/dashboard';
 
