@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 
 router = APIRouter()
 
-# --- OPTIMIZED SECURE LOGIN PAGE ---
+# --- OPTIMIZED SECURE LOGIN PAGE WITH SMART REDIRECT ---
 LOGIN_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -29,21 +29,18 @@ LOGIN_HTML = """
         --success: #22c55e; --error: #ef4444;
     }
 
-    /* --- 2. APP FEEL (NO BLUE FLASH / SELECTION) --- */
-    * { 
-        box-sizing: border-box; margin: 0; padding: 0; 
-        -webkit-tap-highlight-color: transparent; outline: none; 
-    }
+    /* --- 2. BASE STYLES --- */
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; outline: none; }
     
     body { 
         background: var(--bg); color: var(--text); 
         font-family: 'Plus Jakarta Sans', sans-serif; 
         height: 100dvh; width: 100vw; overflow: hidden; 
         display: flex; flex-direction: column;
-        user-select: none; -webkit-user-select: none; /* App Like */
+        user-select: none; -webkit-user-select: none;
     }
 
-    input { user-select: text; -webkit-user-select: text; } /* Typing allowed */
+    input { user-select: text; -webkit-user-select: text; }
 
     /* GRID BACKGROUND */
     .grid-bg { 
@@ -54,7 +51,7 @@ LOGIN_HTML = """
         pointer-events: none;
     }
 
-    /* --- 3. LAYOUT (HEADER / FOOTER) --- */
+    /* --- 3. LAYOUT --- */
     nav {
         width: 100%; padding: 20px 30px; 
         display: flex; justify-content: space-between; align-items: center;
@@ -68,7 +65,7 @@ LOGIN_HTML = """
 
     main {
         flex: 1; display: flex; justify-content: center; align-items: center;
-        padding: 20px; z-index: 5;
+        padding: 20px; z-index: 5; position: relative;
     }
 
     footer {
@@ -76,20 +73,43 @@ LOGIN_HTML = """
         color: #444; font-size: 0.75rem; font-weight: 500; z-index: 10;
     }
 
-    /* --- 4. AUTH CARD (GLASSMORPHISM) --- */
+    /* --- 4. AUTH CARD --- */
+    .auth-container { position: relative; width: 100%; max-width: 420px; }
+
     .auth-card { 
-        width: 100%; max-width: 420px; padding: 40px; 
+        width: 100%; padding: 40px; 
         background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
         border: 1px solid var(--border); border-radius: 24px; 
         box-shadow: 0 20px 60px rgba(0,0,0,0.5); 
         position: relative; opacity: 0; transform: translateY(20px);
     }
 
+    /* --- 5. FULL SCREEN LOADER (Overlay) --- */
+    .app-loader {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: var(--card-bg); backdrop-filter: blur(20px);
+        border-radius: 24px;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 20;
+        opacity: 0; pointer-events: none; visibility: hidden;
+        transition: opacity 0.3s ease;
+    }
+    .app-loader.active { opacity: 1; pointer-events: all; visibility: visible; }
+    
+    .spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(255,255,255,0.1);
+        border-radius: 50%; border-top-color: var(--accent);
+        animation: spin 1s ease-in-out infinite; margin-bottom: 20px;
+    }
+    .loader-text { font-size: 0.95rem; font-weight: 600; color: white; letter-spacing: 0.5px; }
+    .loader-sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 5px; }
+
+    /* --- FORM ELEMENTS --- */
     .header-text { text-align: center; margin-bottom: 30px; } 
     .title { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.02em; } 
     .subtitle { color: var(--text-dim); font-size: 0.9rem; }
 
-    /* SOCIAL BUTTONS */
     .social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 25px; }
     .btn-social { 
         display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; 
@@ -97,13 +117,11 @@ LOGIN_HTML = """
         color: white; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; font-weight: 600;
     }
     .btn-social:hover { background: rgba(255,255,255,0.08); border-color: #555; transform: translateY(-2px); }
-    .btn-social i { font-size: 1.1rem; }
 
     .divider { display: flex; align-items: center; margin-bottom: 25px; color: var(--text-dim); font-size: 0.75rem; font-weight: 600; letter-spacing: 1px; } 
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); opacity: 0.5; } 
     .divider span { padding: 0 15px; }
 
-    /* INPUTS */
     .input-group { margin-bottom: 16px; position: relative; } 
     .input-wrapper { position: relative; }
     .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 1.1rem; pointer-events: none; transition: 0.3s; }
@@ -116,10 +134,6 @@ LOGIN_HTML = """
     input:focus { border-color: var(--accent); background: rgba(0,0,0,0.5); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
     input:focus + .input-icon { color: white; }
 
-    /* HONEYPOT */
-    .hp-field { display: none; }
-
-    /* MAIN BUTTON */
     .btn-primary { 
         width: 100%; padding: 16px; background: white; color: black; 
         border: none; border-radius: 100px; font-weight: 700; font-size: 1rem; cursor: pointer; margin-top: 10px; 
@@ -127,13 +141,11 @@ LOGIN_HTML = """
         display: flex; justify-content: center; align-items: center;
     }
     .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255,255,255,0.15); }
-    .btn-primary:active:not(:disabled) { transform: scale(0.98); } 
     .btn-primary:disabled { opacity: 0.6; cursor: wait; }
 
-    .loader { display: none; width: 20px; height: 20px; border: 2px solid rgba(0,0,0,0.1); border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite; } 
+    .btn-loader { display: none; width: 20px; height: 20px; border: 2px solid rgba(0,0,0,0.1); border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite; } 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* FOOTER LINKS */
     .toggle-text { margin-top: 24px; text-align: center; font-size: 0.9rem; color: var(--text-dim); } 
     .link { color: white; text-decoration: none; font-weight: 600; cursor: pointer; margin-left: 5px; transition: color 0.2s; }
     .link:hover { color: var(--accent); }
@@ -164,50 +176,60 @@ LOGIN_HTML = """
   </nav>
 
   <main>
-    <div class="auth-card" id="authCard">
-      <div class="header-text">
-        <div class="title" id="formTitle">Welcome Back</div>
-        <div class="subtitle" id="formSubtitle">Secure access to your dashboard</div>
-      </div>
-
-      <div class="social-grid">
-        <button class="btn-social" onclick="signInWithProvider('google')">
-          <i class="ri-google-fill"></i> Google
-        </button>
-        <button class="btn-social" onclick="signInWithProvider('github')">
-          <i class="ri-github-fill"></i> GitHub
-        </button>
-      </div>
-
-      <div class="divider"><span>OR EMAIL</span></div>
-
-      <form id="authForm" onsubmit="handleAuth(event)">
-        <input type="text" id="_hp_check" class="hp-field" tabindex="-1" autocomplete="off">
+    <div class="auth-container">
         
-        <div class="input-group">
-          <div class="input-wrapper">
-            <input type="email" id="email" placeholder="name@company.com" required autocomplete="email">
-            <i class="ri-mail-line input-icon"></i>
+        <div class="auth-card" id="authCard">
+          <div class="header-text">
+            <div class="title" id="formTitle">Welcome Back</div>
+            <div class="subtitle" id="formSubtitle">Secure access to your dashboard</div>
           </div>
-        </div>
-        
-        <div class="input-group">
-          <div class="input-wrapper">
-            <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
-            <i class="ri-lock-2-line input-icon"></i>
+
+          <div class="social-grid">
+            <button class="btn-social" onclick="signInWithProvider('google')">
+              <i class="ri-google-fill"></i> Google
+            </button>
+            <button class="btn-social" onclick="signInWithProvider('github')">
+              <i class="ri-github-fill"></i> GitHub
+            </button>
           </div>
+
+          <div class="divider"><span>OR EMAIL</span></div>
+
+          <form id="authForm" onsubmit="handleAuth(event)">
+            <input type="text" id="_hp_check" style="display:none" tabindex="-1" autocomplete="off">
+            
+            <div class="input-group">
+              <div class="input-wrapper">
+                <input type="email" id="email" placeholder="name@company.com" required autocomplete="email">
+                <i class="ri-mail-line input-icon"></i>
+              </div>
+            </div>
+            
+            <div class="input-group">
+              <div class="input-wrapper">
+                <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+                <i class="ri-lock-2-line input-icon"></i>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary" id="authBtn">
+              <span id="btnText">Sign In</span>
+              <div class="btn-loader" id="btnLoader"></div>
+            </button>
+
+            <div class="toggle-text">
+              <span id="footerPrompt">New here?</span>
+              <span class="link" onclick="toggleMode()" id="toggleLink">Create account</span>
+            </div>
+          </form>
         </div>
 
-        <button type="submit" class="btn-primary" id="authBtn">
-          <span id="btnText">Sign In</span>
-          <div class="loader" id="btnLoader"></div>
-        </button>
-
-        <div class="toggle-text">
-          <span id="footerPrompt">New here?</span>
-          <span class="link" onclick="toggleMode()" id="toggleLink">Create account</span>
+        <div class="app-loader" id="appLoader">
+            <div class="spinner"></div>
+            <div class="loader-text">Verifying Profile...</div>
+            <div class="loader-sub">Just a moment</div>
         </div>
-      </form>
+
     </div>
   </main>
 
@@ -235,7 +257,7 @@ LOGIN_HTML = """
             supabaseClient = supabase.createClient(SB_URL, SB_KEY);
         }
         
-        // GSAP Animation
+        // Initial Animation
         if(typeof gsap !== 'undefined') {
             gsap.to("#authCard", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" });
         } else {
@@ -244,18 +266,103 @@ LOGIN_HTML = """
         }
     });
 
-    // --- AUTH LOGIC ---
+    // --- AUTH FLOW ---
     async function signInWithProvider(providerName) {
       if(!supabaseClient) return;
       try {
+        // OAuth ke liye bhi hum Dashboard par bhejte hain, wahan se logic check hoga
+        // Par yahan local loader dikhana mushkil hai kyunki redirect hota hai.
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
           provider: providerName,
-          options: { redirectTo: window.location.origin + '/onboarding' }
+          options: { redirectTo: 'https://www.luviio.in/dashboard' }
         });
         if (error) throw error;
       } catch (error) { showToast("Connection Error", "error"); }
     }
 
+    async function handleAuth(e) {
+      e.preventDefault();
+      if (isProcessing) return;
+      if (document.getElementById('_hp_check').value) return; 
+      
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (password.length < 6) { 
+          showToast("Password too short (min 6 chars)", "error"); 
+          shakeCard(); return; 
+      }
+      
+      setButtonLoading(true);
+
+      try {
+        if(!supabaseClient) throw new Error("Connection failed.");
+
+        let result;
+        if (isSignUp) {
+          // SIGN UP
+          result = await supabaseClient.auth.signUp({ 
+            email, password, options: { emailRedirectTo: 'https://www.luviio.in/onboarding' }
+          });
+        } else {
+          // SIGN IN
+          result = await supabaseClient.auth.signInWithPassword({ email, password });
+        }
+
+        if (result.error) throw result.error;
+
+        if (isSignUp && result.data.user && !result.data.session) {
+           showToast("Check your email for confirmation link.", "success");
+           document.getElementById('authForm').reset();
+           setButtonLoading(false);
+        } else {
+           // LOGIN SUCCESS -> SHOW OVERLAY LOADER
+           showAppLoader(true);
+           
+           // Start Prefetching / Checking Profile
+           await checkProfileAndRedirect(result.data.user.id);
+        }
+
+      } catch (error) {
+        let msg = error.message;
+        if(msg.includes("Invalid login")) msg = "Incorrect email or password.";
+        showToast(msg, "error");
+        shakeCard();
+        setButtonLoading(false);
+      }
+    }
+
+    // --- SMART REDIRECT LOGIC ---
+    async function checkProfileAndRedirect(userId) {
+        try {
+            // "Verifying..." text update
+            updateLoaderText("Checking profile data...");
+
+            // 1. Check Profiles Table
+            const { data: profile, error } = await supabaseClient
+                .from('profiles')
+                .select('role')
+                .eq('id', userId)
+                .single();
+
+            // 2. Decision Time
+            if (!error && profile && profile.role) {
+                // Profile Hai -> Go to Dashboard
+                updateLoaderText("Profile found! Redirecting...");
+                setTimeout(() => window.location.href = "/dashboard", 500);
+            } else {
+                // Profile Nahi Hai -> Go to Onboarding
+                updateLoaderText("Setting up account...");
+                setTimeout(() => window.location.href = "/onboarding", 500);
+            }
+        } catch (err) {
+            console.error("Profile check error:", err);
+            // Error aaya to safe option: Onboarding par bhejo
+            setTimeout(() => window.location.href = "/onboarding", 500);
+        }
+    }
+
+    // --- UI HELPERS ---
     function toggleMode() {
       isSignUp = !isSignUp;
       const title = isSignUp ? "Create Account" : "Welcome Back";
@@ -264,7 +371,6 @@ LOGIN_HTML = """
       const prompt = isSignUp ? "Already a member?" : "New here?";
       const link = isSignUp ? "Log in" : "Create account";
 
-      // Animation
       if(typeof gsap !== 'undefined') {
           gsap.fromTo(".header-text", {opacity:0, y:-5}, {opacity:1, y:0, duration:0.3});
       }
@@ -276,73 +382,25 @@ LOGIN_HTML = """
       document.getElementById('toggleLink').innerText = link;
     }
 
-    async function handleAuth(e) {
-      e.preventDefault();
-      if (isProcessing) return;
-      if (document.getElementById('_hp_check').value) return; // Honeypot
-      
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-
-      if (password.length < 6) { 
-          showToast("Password too short (min 6 chars)", "error"); 
-          shakeCard(); return; 
-      }
-      
-      setLoading(true);
-
-      try {
-        if(!supabaseClient) throw new Error("Connection failed.");
-
-        let result;
-        if (isSignUp) {
-          result = await supabaseClient.auth.signUp({ 
-            email, password, options: { emailRedirectTo: window.location.origin + '/onboarding' }
-          });
-        } else {
-          result = await supabaseClient.auth.signInWithPassword({ email, password });
-        }
-
-        if (result.error) throw result.error;
-
-        if (isSignUp && result.data.user && !result.data.session) {
-           showToast("Check your email for confirmation link.", "success");
-           document.getElementById('authForm').reset();
-        } else {
-           showToast("Access Granted", "success");
-           // Redirect Logic
-           checkProfileAndRedirect(result.data.user.id);
-        }
-
-      } catch (error) {
-        let msg = error.message;
-        if(msg.includes("Invalid login")) msg = "Incorrect email or password.";
-        showToast(msg, "error");
-        shakeCard();
-      } finally { 
-        setLoading(false); 
-      }
-    }
-
-    async function checkProfileAndRedirect(userId) {
-        try {
-            const { data: profile } = await supabaseClient.from('profiles').select('role').eq('id', userId).single();
-            if (profile && profile.role) {
-                setTimeout(() => window.location.href = "/dashboard", 800);
-            } else {
-                setTimeout(() => window.location.href = "/onboarding", 800);
-            }
-        } catch (err) {
-            setTimeout(() => window.location.href = "/onboarding", 800);
-        }
-    }
-
-    // --- UI HELPERS ---
-    function setLoading(state) {
+    function setButtonLoading(state) {
       isProcessing = state;
       document.getElementById('btnText').style.display = state ? 'none' : 'block';
       document.getElementById('btnLoader').style.display = state ? 'block' : 'none';
       document.getElementById('authBtn').disabled = state;
+    }
+
+    function showAppLoader(show) {
+        const loader = document.getElementById('appLoader');
+        if(show) {
+            loader.classList.add('active');
+        } else {
+            loader.classList.remove('active');
+        }
+    }
+
+    function updateLoaderText(text) {
+        const txt = document.querySelector('.loader-text');
+        if(txt) txt.innerText = text;
     }
 
     function showToast(msg, type) {
