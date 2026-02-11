@@ -1,73 +1,59 @@
-from fastapi import APIRouter, Request
-import resend
 import os
+import sys
 
-# ⚠️ Dhyan de: Yahan 'app = FastAPI()' NAHI hona chahiye.
-# Yahan 'router = APIRouter()' hona chahiye.
-router = APIRouter()
+# ----------------------------------------------------------------
+# 🔧 VERCEL PATH FIX (Strictly Required)
+# Ye line Python ko batati hai ki 'routes' folder yahin maujood hai
+# ----------------------------------------------------------------
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# --- CONFIGURATION ---
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+from fastapi import FastAPI, Request, Header
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 
-if not RESEND_API_KEY:
-    print("⚠️ WARNING: RESEND_API_KEY is missing via Environment Variables")
+# ✅ Import Your New Router
+from routes.resend_mail import router as mail_router
 
-resend.api_key = RESEND_API_KEY
+app = FastAPI()
 
-# --- WEBHOOK ROUTE ---
-@router.post("/webhook/send-email")
-async def handle_supabase_webhook(request: Request):
-    try:
-        # 1. Supabase se data lena
-        payload = await request.json()
-        record = payload.get('record', {})
-        user_email = record.get('email')
+# 1. Path Setup
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-        # Agar email nahi mila to skip karo
-        if not user_email: 
-            return {"status": "skipped", "message": "No email found"}
+# 2. Mount Static & Templates
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-        print(f"Sending welcome email to: {user_email}")
+# ✅ Include the Router (Connects /resend-mail)
+app.include_router(mail_router)
 
-        # 2. PROFESSIONAL HTML CONTENT
-        html_content = """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f9f9f9; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-                .btn { display: inline-block; background-color: #000000; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2 style="margin-top: 0; color: #000;">LUVIIO</h2>
-                <h3 style="color: #333;">You’re in. Welcome to the future of listings.</h3>
-                <p style="color: #555; line-height: 1.6;">Hi there,</p>
-                <p style="color: #555; line-height: 1.6;">You have successfully secured your spot on the exclusive waitlist for Luviio.</p>
-                <p style="color: #555; line-height: 1.6;">The current marketplace ecosystem faces a critical trust deficit. We are rebuilding the foundation. You are now part of a select group waiting for the new <strong>Operating System for Listings</strong>.</p>
-                <a href="https://x.com/LUVIIO_in" class="btn">Follow updates on X</a>
-                <p style="margin-top: 30px; font-size: 12px; color: #999;">&copy; 2026 Luviio Technologies.</p>
-            </div>
-        </body>
-        </html>
-        """
+# --- ROUTES ---
 
-        # 3. Email bhejna (Resend ke through)
-        params = {
-            "from": "Luviio Team <no-reply@luviio.in>",
-            "to": [user_email],
-            "subject": "You’re in. Welcome to the future of listings.",
-            "html": html_content,
-        }
+# 1. Home Page
+@app.get("/", response_class=HTMLResponse)
+async def render_home(request: Request, x_up_target: str = Header(None)):
+    return templates.TemplateResponse("app/pages/home.html", {
+        "request": request,
+        "title": "LUVIIO | Verified Markets",
+        "active_page": "home",
+        "up_fragment": x_up_target is not None 
+    })
 
-        email = resend.Emails.send(params)
-        print(f"✅ Email Sent Successfully! ID: {email}")
-        
-        return {"status": "success", "email_id": email}
+# 2. Login Page
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, x_up_target: str = Header(None)):
+    return templates.TemplateResponse("app/pages/login.html", {
+        "request": request,
+        "title": "Login | LUVIIO",
+        "up_fragment": x_up_target is not None
+    })
 
-    except Exception as e:
-        print(f"❌ Error sending email: {str(e)}")
-        return {"status": "error", "details": str(e)}
+# 3. Waitlist Fragment
+@app.get("/waitlist", response_class=HTMLResponse)
+async def render_waitlist(request: Request, x_up_target: str = Header(None)):
+    return templates.TemplateResponse("app/pages/waitlist.html", {
+        "request": request,
+        "title": "Join Waitlist | LUVIIO", 
+        "active_page": "home",
+        "up_fragment": x_up_target is not None 
+    })
